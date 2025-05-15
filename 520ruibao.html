@@ -1,0 +1,1595 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>致青春 - Enhanced 3D相册</title>
+    <style>
+        /* 基础样式重置 */
+        *{margin: 0;padding: 0;}
+        html,body{height: 100%;}
+        
+        /* 主体样式 - 设置3D空间和背景 */
+        body{
+            display: flex;
+            perspective: 1000px; /* 设置3D视角深度 */
+            transform-style: preserve-3d; /* 保留3D变换效果 */
+            background-color: #111;
+            background-image: url(images/star.jpg);
+            background-size: cover;
+            background-position: center;
+            height:100%;
+            width: 100%;
+            overflow: hidden;
+            transition: perspective 0.5s ease-out; /* 视角变化动画 */
+            font-family: 'Arial', sans-serif;
+            /* 添加径向渐变背景增强效果 */
+            background-image: radial-gradient(circle at center, rgba(30,30,60,0.6) 0%, rgba(10,10,25,0.8) 70%), url(images/star.jpg);
+        }
+        
+        /* 控制面板样式 */
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px; /* 改为右侧 */
+            z-index: 100;
+            display: flex;
+            flex-direction: column; /* 改为垂直排列 */
+            gap: 15px;
+            background: rgba(0,0,0,0.5);
+            padding: 20px 10px; /* 调整内边距以适应垂直布局 */
+            border-radius: 30px;
+            opacity: 0.4; /* 默认半透明 */
+            transition: opacity 0.3s;
+            backdrop-filter: blur(5px); /* 模糊背景效果 */
+            box-shadow: 0 0 20px rgba(0,0,100,0.3); /* 蓝色阴影效果 */
+        }
+        
+        /* 控制面板悬停效果 */
+        #controls:hover {
+            opacity: 1; /* 悬停时完全不透明 */
+        }
+        
+        /* 控制按钮样式 */
+        .control-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+        
+        /* 控制按钮悬停效果 */
+        .control-btn:hover {
+            background: rgba(255,255,255,0.4);
+            transform: scale(1.1);
+            box-shadow: 0 0 10px rgba(255,255,255,0.8);
+        }
+        
+        /* 相册主容器 */
+        #box{
+            position: relative;
+            display: flex;
+            width: 120px; /* 照片宽度 */
+            height: 160px; /* 照片高度 */
+            margin: auto;
+            transform-style: preserve-3d; /* 保留子元素的3D效果 */
+            transform: rotateX(-10deg); /* 初始倾斜角度 */
+            /* Apply entrance animation */
+            animation: fadeInAlbum 1.5s 0.5s ease-out forwards; /* duration, delay, timing, fill-mode */
+            opacity: 0; /* Initial state for animation, will be overridden by JS if needed but good for CSS-only load */
+            --initial-rotate-x: -10deg; /* Store initial rotation for animation */
+        }
+        
+        /* 每层照片的容器 */
+        .photo-container {
+            position: absolute;
+            transform-style: preserve-3d;
+            width: 100%;
+            height: 100%;
+            transition: transform 1s ease-out;
+            /* 添加CSS变量存储原始transform */
+            --original-transform: '';
+        }
+        
+        /* 为奇数和偶数层添加不同的旋转类 */
+        .layer-odd {
+            animation: rotateCounterClockwise 80s linear infinite;
+        }
+        
+        .layer-even {
+            animation: rotateClockwise 80s linear infinite;
+        }
+        
+        /* 定义旋转动画 */
+        @keyframes rotateClockwise {
+            0% { transform: translateY(var(--layer-y)) rotateY(0deg); }
+            100% { transform: translateY(var(--layer-y)) rotateY(360deg); }
+        }
+        
+        @keyframes rotateCounterClockwise {
+            0% { transform: translateY(var(--layer-y)) rotateY(360deg); }
+            100% { transform: translateY(var(--layer-y)) rotateY(0deg); }
+        }
+        
+        /* 单个照片样式 */
+        .photo {
+            transform-style: preserve-3d;
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            line-height: 150px;
+            font-size: 18px;
+            color: white;
+            text-align: center;
+            background-color: #333;
+            box-shadow: 0 0 15px rgba(255,255,255,0.3),
+                        inset 0 0 10px rgba(0,0,0,0.3); /* 内外阴影创造深度感 */
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            backface-visibility: visible; /* 确保背面可见 */
+            cursor: pointer;
+            overflow: hidden;
+            transition: transform 0.4s cubic-bezier(0.2, 1, 0.3, 1), 
+                        box-shadow 0.3s ease-out;
+            transform-origin: center center; /* 变换原点居中 */
+            /* 添加发光边框效果 */
+            box-shadow: 0 0 15px rgba(255,255,255,0.2), 
+                        0 0 30px rgba(70,130,255,0.1),
+                        inset 0 0 5px rgba(0,0,0,0.4);
+        }
+        
+        /* 照片悬停效果 - 移除所有会导致位置变化的效果 */
+        .photo:hover {
+            /* 去除所有transform, 将由JS控制 */
+            box-shadow: 0 0 30px rgba(255,255,255,0.6),
+                        0 0 50px rgba(70,130,255,0.3),
+                        inset 0 0 5px rgba(0,0,0,0.2);
+            z-index: 100;
+            filter: brightness(1.2); /* 提高亮度 */
+        }
+
+        /* 完全移除photo-hover类的transform */
+        .photo-hover {
+            box-shadow: 0 0 30px rgba(255,255,255,0.6),
+                        0 0 50px rgba(70,130,255,0.3),
+                        inset 0 0 5px rgba(0,0,0,0.2);
+            z-index: 100;
+            filter: brightness(1.2);
+        }
+
+        /* 照片正面和背面的通用样式 */
+        .photo-front, .photo-back {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            backface-visibility: hidden; /* 隐藏背面，实现翻转效果 */
+            border-radius: 8px;
+            background-size: cover;
+            background-position: center;
+            /* 添加细微纹理 */
+            box-shadow: inset 0 0 0 1px rgba(255,255,255,0.15);
+        }
+
+        /* 照片表面高光效果 */
+        .photo-front::after, .photo-back::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 50%);
+            border-radius: 8px;
+            /* 添加薄膜效果 */
+            box-shadow: inset 0 0 5px rgba(255,255,255,0.1);
+        }
+
+        /* 照片正面样式 */
+        .photo-front {
+            z-index: 2;
+        }
+
+        /* 照片背面样式 - 旋转180度 */
+        .photo-back {
+            transform: rotateY(180deg);
+        }
+
+        /* 照片标题样式 */
+        .photo-title {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 10px 5px; /* 增加上下内边距，给多行文本留出空间 */
+            margin: 0 0 6px 0; /* 底部增加间距 */
+            text-align: center;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.8));
+            color: white;
+            font-size: 14px;
+            transform: translateY(100%); /* 默认隐藏在底部 */
+            transition: transform 0.3s ease;
+            z-index: 3;
+            /* 增加渐变和阴影效果 */
+            text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+            backdrop-filter: blur(3px);
+            border-radius: 0 0 8px 8px; /* 保持和照片底部一致的圆角 */
+            
+            /* 添加文本换行和溢出处理 */
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+            white-space: normal; /* 允许正常换行 */
+            overflow: hidden; /* 超出部分隐藏 */
+            line-height: 1.4; /* 增加行高以便更好地显示表情符号 */
+            max-height: 4.8em; /* 最多显示约4行文本 */
+            box-sizing: border-box; /* 确保内边距不会增加元素总宽度 */
+        }
+        
+        /* 照片悬停时标题显示效果 - 增加高度，确保多行文本可见 */
+        .photo:hover .photo-title {
+            transform: translateY(0); /* 显示标题 */
+            max-height: 5em; /* 悬停时允许更多行显示 */
+        }
+
+        /* 图片全屏显示遮罩层 */
+        #overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none; /* 默认不接收鼠标事件 */
+            transition: opacity 0.5s ease;
+            /* 添加更精美的背景 */
+            background: radial-gradient(circle at center, rgba(20,20,40,0.7) 0%, rgba(0,0,0,0.95) 70%);
+            backdrop-filter: blur(5px);
+        }
+        
+        /* 激活遮罩层样式 */
+        #overlay.active {
+            opacity: 1;
+            pointer-events: auto; /* 激活时接收鼠标事件 */
+        }
+        
+        /* 全屏显示的图片样式 */
+        #overlay-image {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 5px;
+            box-shadow: 0 0 30px rgba(255,255,255,0.2);
+            /* 添加美化效果 */
+            box-shadow: 0 5px 30px rgba(0,0,0,0.6), 0 0 100px rgba(100,150,255,0.2);
+            transform: scale(0.95);
+            transition: transform 0.3s ease-out;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        
+        /* 图片加载动画 */
+        #overlay.active #overlay-image {
+            transform: scale(1);
+        }
+        
+        /* 关闭按钮样式 */
+        #close-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+            background: none;
+            border: none;
+            text-shadow: 0 0 10px rgba(0,0,0,0.5);
+            opacity: 0.7;
+            transition: all 0.3s;
+        }
+        
+        #close-button:hover {
+            opacity: 1;
+            transform: scale(1.1);
+            text-shadow: 0 0 15px rgba(255,255,255,0.8);
+        }
+
+        /* 地面反射效果 */
+        #reflection {
+            position: absolute;
+            left: 50%;
+            top: 100%;
+            width: 1200px;
+            height: 1200px;
+            background: radial-gradient(ellipse at center, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0) 70%);
+            border-radius: 50%;
+            transform: rotateX(90deg) translate3d(-50%, 0, -140px) scaleY(1.5); /* 将反射旋转到水平面 */
+            opacity: 0.6;
+            /* 添加更精细的反射效果 */
+            background: radial-gradient(ellipse at center, 
+                        rgba(70,100,180,0.12) 0%, 
+                        rgba(30,50,100,0.08) 30%,
+                        rgba(0,0,0,0) 70%);
+            filter: blur(2px);
+        }
+        
+        /* Keyframes for album title glow animation */
+        @keyframes albumTitleGlow {
+            0%, 100% {
+                text-shadow: 0 0 3px rgba(255, 255, 255, 0.6), /* Inner soft white */
+                             0 0 10px rgba(150, 180, 255, 0.5), /* Softer blue */
+                             0 0 20px rgba(100, 150, 255, 0.4); /* Wider, more diffuse blue */
+                opacity: 0.8;
+            }
+            50% {
+                text-shadow: 0 0 5px rgba(255, 255, 255, 0.8), /* Brighter inner white */
+                             0 0 18px rgba(150, 180, 255, 0.7), /* Brighter, slightly larger blue */
+                             0 0 35px rgba(100, 150, 255, 0.5); /* Wider, brighter diffuse blue */
+                opacity: 0.9;
+            }
+        }
+        
+        /* 添加相册标题 */
+        #album-title {
+            position: fixed;
+            top: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 22px;
+            font-weight: 300;
+            letter-spacing: 2px; /* Slightly reduced initial letter spacing for multi-line */
+            transition: letter-spacing 0.3s ease-out, opacity 0.3s ease-out; /* Keep transition for these */
+            text-align: center;
+            line-height: 1.6; /* Slightly increased for multi-line readability */
+            width: 100%;
+            max-width: 90vw;
+            margin: 0 auto;
+            animation: albumTitleGlow 5s infinite alternate ease-in-out; /* Apply the animation */
+        }
+        
+        #album-title:hover {
+            text-shadow: 0 0 6px rgba(255, 255, 255, 0.9),  /* Stronger inner white on hover */
+                         0 0 25px rgba(150, 180, 255, 0.8), /* Stronger blue on hover */
+                         0 0 50px rgba(100, 150, 255, 0.7); /* Wider, stronger blue on hover */
+            letter-spacing: 3px; /* Adjusted hover letter spacing */
+            opacity: 1;
+            animation-play-state: paused; /* Pause the animation on hover to show static strong glow */
+        }
+        
+        /* 添加粒子动画效果 */
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+        
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0;
+            animation: twinkle 10s infinite;
+        }
+        
+        @keyframes twinkle {
+            0% { opacity: 0; }
+            50% { opacity: 0.8; }
+            100% { opacity: 0; }
+        }
+        
+        /* 爱心特效样式 */
+        .heart {
+            position: fixed;
+            pointer-events: none; /* 防止爱心影响鼠标事件 */
+            z-index: 999;
+            animation: float-heart 1.5s linear forwards;
+            transform-origin: center;
+            color: #ff6b95;
+            text-shadow: 0 0 6px rgba(255, 107, 149, 0.5);
+            font-size: 20px;
+            font-family: Arial, sans-serif;
+        }
+        
+        /* 爱心浮动动画 */
+        @keyframes float-heart {
+            0% {
+                transform: translate(-50%, -50%) scale(0.3) rotate(0deg);
+                opacity: 0.8;
+            }
+            20% {
+                opacity: 0.8;
+            }
+            100% {
+                transform: translate(-50%, -200%) scale(1.2) rotate(40deg);
+                opacity: 0;
+            }
+        }
+        
+        /* 给爱心添加多种颜色变体 */
+        .heart-pink { color: #ff6b95; text-shadow: 0 0 6px rgba(255, 107, 149, 0.5); }
+        .heart-purple { color: #cb6bff; text-shadow: 0 0 6px rgba(203, 107, 255, 0.5); }
+        .heart-blue { color: #6ba3ff; text-shadow: 0 0 6px rgba(107, 163, 255, 0.5); }
+        .heart-cyan { color: #6bffed; text-shadow: 0 0 6px rgba(107, 255, 237, 0.5); }
+        .heart-gold { color: #ffcf6b; text-shadow: 0 0 6px rgba(255, 207, 107, 0.5); }
+
+        /* 添加更多视觉特效的CSS */
+        /* 樱花飘落效果 */
+        .cherry-blossom {
+            position: absolute;
+            width: 10px;
+            height: 10px;
+            background-color: #ffc6d9;
+            border-radius: 50% 0 50% 50%;
+            transform: rotate(45deg);
+            opacity: 0.8;
+            pointer-events: none;
+            z-index: 2;
+            filter: drop-shadow(0 0 2px rgba(255, 198, 217, 0.3));
+            animation: fall 10s linear forwards;
+        }
+        
+        @keyframes fall {
+            0% { transform: translateY(-5vh) rotate(0deg) scale(0.6); opacity: 0; }
+            10% { opacity: 0.8; }
+            100% { transform: translateY(100vh) rotate(360deg) scale(0.2); opacity: 0; }
+        }
+        
+        /* 鼠标光晕效果 */
+        .cursor-glow {
+            position: fixed;
+            width: 200px;
+            height: 200px;
+            pointer-events: none;
+            z-index: 1;
+            background: radial-gradient(circle, rgba(100,150,255,0.2) 0%, rgba(100,150,255,0) 70%);
+            opacity: 0.7;
+            transform: translate(-50%, -50%);
+            mix-blend-mode: screen;
+            filter: blur(10px);
+            transition: width 0.3s, height 0.3s;
+        }
+        
+        /* 照片点击翻转特效 */
+        .photo.flipped .photo-front {
+            transform: rotateY(180deg);
+        }
+        
+        .photo.flipped .photo-back {
+            transform: rotateY(0deg);
+        }
+        
+        /* 改进照片正面和背面的过渡效果 */
+        .photo-front, .photo-back {
+            transition: transform 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+            backface-visibility: hidden;
+        }
+        
+        /* 添加照片阴影投射效果 */
+        .photo::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+            opacity: 0.3;
+            z-index: -1;
+            transition: opacity 0.3s ease;
+            transform: translateZ(-5px) rotateX(10deg);
+        }
+        
+        .photo:hover::before {
+            opacity: 0.5;
+        }
+        
+        /* 添加音乐播放器样式 */
+        #music-player {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 30px;
+            opacity: 0.4;
+            transition: opacity 0.3s;
+            backdrop-filter: blur(5px);
+        }
+        
+        #music-player:hover {
+            opacity: 1;
+        }
+        
+        #music-player button {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 16px;
+            cursor: pointer;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            transition: all 0.3s;
+        }
+        
+        #music-player button:hover {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(1.1);
+        }
+        
+        #song-info {
+            color: white;
+            font-size: 12px;
+            text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+        }
+        
+        /* 全景模式切换按钮 */
+        #panorama-toggle {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            z-index: 100;
+            opacity: 0.6;
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+        }
+        
+        #panorama-toggle:hover {
+            opacity: 1;
+            transform: scale(1.05);
+        }
+        
+        /* 全景模式 */
+        body.panorama-mode {
+            background: linear-gradient(to bottom, #001220, #003);
+        }
+        
+        body.panorama-mode .star {
+            opacity: 0.8 !important;
+        }
+        
+        /* 交互式工具栏 */
+        #toolbar {
+            position: fixed;
+            bottom: 80px;
+            right: 20px; /* 改为右侧，不再需要居中 */
+            transform: none; /* 移除中心对齐变换 */
+            display: flex;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 30px;
+            opacity: 0.4;
+            transition: opacity 0.3s;
+            z-index: 100;
+            backdrop-filter: blur(5px);
+        }
+        
+        #toolbar:hover {
+            opacity: 1;
+        }
+        
+        .toolbar-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            font-size: 14px;
+        }
+        
+        .toolbar-btn:hover {
+            background: rgba(255, 255, 255, 0.4);
+            transform: scale(1.1);
+        }
+        
+        /* 添加工具提示 */
+        .tooltip {
+            position: relative;
+        }
+        
+        .tooltip:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            border-radius: 5px;
+            font-size: 12px;
+            white-space: nowrap;
+            margin-bottom: 5px;
+        }
+
+        /* Keyframes for album entrance animation */
+        @keyframes fadeInAlbum {
+            from {
+                opacity: 0;
+                transform: scale(0.95) rotateX(var(--initial-rotate-x, -10deg)); /* Maintain initial rotation if possible */
+            }
+            to {
+                opacity: 1;
+                transform: scale(1) rotateX(var(--initial-rotate-x, -10deg)); /* Maintain initial rotation if possible */
+            }
+        }
+
+        /* Style for the love timer */
+        #love-timer {
+            position: fixed;
+            top: 155px; /* Adjusted to be below a 3-line title */
+            left: 50%;
+            transform: translateX(-50%);
+            color: white;
+            font-size: 16px;
+            font-weight: 300;
+            text-shadow: 0 0 8px rgba(255, 107, 149, 0.6), 0 0 15px rgba(255, 107, 149, 0.4); /* Pinkish glow */
+            z-index: 100;
+            text-align: center;
+            line-height: 1.5;
+            width: 100%;
+            max-width: 90vw;
+            margin: 0 auto;
+            opacity: 0; /* Initially hidden, will be faded in by JS */
+            transition: opacity 0.5s ease-in-out;
+        }
+    </style>
+</head>
+<body>
+<!-- 主相册容器 -->
+<div id="box">
+    <!-- 地面反射效果 -->
+    <div id="reflection"></div>
+</div>
+
+<!-- 相册标题 -->
+<h1 id="album-title">2022.10.02 初次遇见 💑，怦然心动自此开始<br>2022.12.07 牵你之手 💌，将余生交付与你<br>我的恋爱脑，只为你而跳动，朝朝暮暮，皆是欢喜 🌸</h1>
+
+<!-- Love Timer Display -->
+<div id="love-timer"></div>
+
+<!-- 控制面板 -->
+<div id="controls">
+    <button class="control-btn" id="rotate-left">←</button>
+    <button class="control-btn" id="auto-rotate">▶</button>
+    <button class="control-btn" id="rotate-right">→</button>
+    <button class="control-btn" id="zoom-in">+</button>
+    <button class="control-btn" id="zoom-out">−</button>
+</div>
+
+<!-- 背景星星特效 -->
+<div class="stars" id="stars"></div>
+
+<!-- 全屏查看照片的遮罩层 -->
+<div id="overlay">
+    <button id="close-button">×</button>
+    <img id="overlay-image" src="" alt="Enlarged photo">
+</div>
+
+<!-- 音乐播放器 -->
+<div id="music-player">
+    <button id="play-pause">▶</button>
+    <div id="song-info">点击播放音乐</div>
+</div>
+
+<!-- 全景模式切换 -->
+<button id="panorama-toggle" class="tooltip" data-tooltip="切换全景模式">全景模式</button>
+
+<!-- 工具栏 -->
+<div id="toolbar">
+    <button class="toolbar-btn tooltip" id="toggle-blossom" data-tooltip="樱花效果已开启">🌸</button>
+</div>
+
+<!-- 鼠标光晕 -->
+<div class="cursor-glow"></div>
+
+<script>
+// 页面加载后延迟初始化，确保DOM完全就绪
+setTimeout(init, 100);
+
+// 初始化函数 - 创建3D相册并设置交互
+function init() {
+    // 获取DOM元素引用
+    const obox = document.getElementById('box');
+    const overlay = document.getElementById('overlay');
+    const overlayImage = document.getElementById('overlay-image');
+    const closeButton = document.getElementById('close-button');
+    
+    // 获取控制按钮引用
+    const autoRotateBtn = document.getElementById('auto-rotate');
+    const rotateLeftBtn = document.getElementById('rotate-left');
+    const rotateRightBtn = document.getElementById('rotate-right');
+    const zoomInBtn = document.getElementById('zoom-in');
+    const zoomOutBtn = document.getElementById('zoom-out');
+    
+    // 情侣间甜蜜短句数组
+    const sweetPhrases = [
+        "此生唯你一人 💑，愿与你共度每一个晨昏",
+        "爱你如初，每个日出都因你而璀璨 💕",
+        "心有灵犀，一念一颦皆是你 💞",
+        "执子之手，漫步时光的每一程 👫",
+        "与你偕老，白首不相离 👴👵",
+        "情深似海，爱意长存 💘",
+        "不离不弃，是我给你的永恒承诺 🔒",
+        "余生请多指教，愿与你共赴山海 🌹",
+        "你如星光，照亮我前行的道路 ✨",
+        "陪你到永远，直到世界尽头 🌈",
+        "岁月静好，只因有你守候 ☀️",
+        "有你在侧，便是最美好的时光 💖",
+        "一笑倾城，倾尽所有只为你 😊",
+        "携手白头，不负此生不负卿 🤝",
+        "温柔如春，岁月因你而温暖 🌸",
+        "人生因你，处处都是风景 🍀",
+        "眼里满是你，心中始终有光 👀",
+        "爱你成习惯，每秒钟都想你 💓",
+        "愿得一人心，白首不相离 💝",
+        "此生只换，不换你 🔄",
+        "遇见你，是我此生最美的奇迹 🎯",
+        "你是我的全部，我的世界因你完整 🌎",
+        "只愿与你相伴，步履不停 🏃‍♂️🏃‍♀️",
+        "你笑便是晴天，所有阴霾皆散去 ☔→☀️",
+        "余生有你，足以安放一切 👣",
+        "爱你，是我最无悔的骄傲 🏆",
+        "思念如潮，每天为你而痴 📅",
+        "陪你到天涯，写尽浪漫诗篇 🗺️",
+        "春夏秋冬，与你共赏四季更迭 🌸❄️",
+        "心中只有你，世界万象皆黯然 💗",
+        "你的名字，早已刻在我心 ✍️",
+        "爱你，不止两三天，而是永恒 ⏱️",
+        "此生守候，不曾放手 🤲",
+        "因你生命绽放，璀璨如画 🎭",
+        "你是我最美的意外，也是唯一的珍藏 🎁",
+        "爱无终点，唯你是归途 🔄",
+        "我们的故事，还在续写每一章 📖",
+        "爱你，是我今生最大的幸福 😍",
+        "你是我心底最渴望的未来，也是无限可能 🔮",
+        "520快乐，我愿用余生证明对你的爱 🌹"
+    ];
+    
+    // 相册配置参数
+    const photosCount = 49; // 照片总数
+    const layers = 3; // 垂直层数
+    const photosPerLayer = Math.ceil(photosCount / layers); // 每层照片数量
+    const baseRadius = 360; // 基础半径，决定照片到中心的距离
+    
+    // 创建星星背景
+    createStars();
+    
+    // 创建每层照片容器及照片
+    for (let layer = 0; layer < layers; layer++) {
+        // 创建层容器
+        const container = document.createElement('div');
+        container.className = 'photo-container';
+        
+        // 根据层数添加奇偶层样式类
+        if (layer % 2 === 0) {
+            container.classList.add('layer-even');
+        } else {
+            container.classList.add('layer-odd');
+        }
+        
+        // 设置CSS变量以供动画使用
+        const layerY = (layer - Math.floor(layers/2)) * 180;
+        container.style.setProperty('--layer-y', `${layerY}px`);
+        
+        // 初始位置设置
+        container.style.transform = `translateY(${layerY}px)`;
+        
+        obox.appendChild(container);
+        
+        // 计算当前层的照片数量，避免角度太近
+        const layerPhotoCount = Math.min(photosPerLayer, photosCount - (layer * photosPerLayer));
+        
+        // 为了更好的分布，奇数层和偶数层照片角度偏移量不同
+        const angleRange = 360; // 照片分布在360度范围内
+        const angleStep = angleRange / layerPhotoCount; // 减小每个照片之间的角度间隔
+        
+        // 为当前层创建照片
+        for (let i = 0; i < layerPhotoCount; i++) {
+            // 计算正面照片索引
+            const photoIndex = layer * photosPerLayer + i + 1;
+            // 计算背面照片索引，错开一半照片数量
+            const backPhotoIndex = (photoIndex + Math.floor(photosCount/2)) % photosCount || photosCount;
+            
+            // 创建照片容器
+            const photo = document.createElement('div');
+            photo.className = 'photo';
+            
+            // 创建照片正面
+            const photoFront = document.createElement('div');
+            photoFront.className = 'photo-front';
+            photoFront.style.background = `url(images/${photoIndex}.jpg) center/cover`;
+            
+            // 创建照片背面
+            const photoBack = document.createElement('div');
+            photoBack.className = 'photo-back';
+            photoBack.style.background = `url(images/${backPhotoIndex}.jpg) center/cover`;
+            
+            // 添加照片标题 - 正面
+            const titleFront = document.createElement('div');
+            titleFront.className = 'photo-title';
+            // 使用甜蜜短句作为标题，确保不超出数组范围
+            const phraseIndexFront = (photoIndex - 1) % sweetPhrases.length;
+            titleFront.textContent = sweetPhrases[phraseIndexFront];
+            photoFront.appendChild(titleFront);
+            
+            // 添加照片标题 - 背面
+            const titleBack = document.createElement('div');
+            titleBack.className = 'photo-title';
+            // 为背面照片选择不同的短句
+            const phraseIndexBack = (backPhotoIndex - 1) % sweetPhrases.length;
+            titleBack.textContent = sweetPhrases[phraseIndexBack];
+            photoBack.appendChild(titleBack);
+            
+            // 将正反面添加到照片容器
+            photo.appendChild(photoFront);
+            photo.appendChild(photoBack);
+            
+            // 计算照片位置
+            // 为每层添加角度偏移，错开不同层的照片
+            const offset = layer * (angleRange / layers); // 根据新的角度范围调整偏移
+            // 计算角度，使照片集中在正前方 (-angleRange/2 到 +angleRange/2)
+            const angle = (i * angleStep) + offset - (angleRange / 2);
+            // 为每层设置不同半径，创造立体感
+            const radius = baseRadius;
+            
+            // 设置照片的3D变换
+            photo.style.transform = `rotateY(${angle}deg) translateZ(${radius}px)`;
+            
+            // 彻底修复悬停问题 - 完全禁用照片与层的动画联动
+            photo.addEventListener('mouseenter', function() {
+                // 1. 保存当前世界坐标系中的位置
+                const rect = this.getBoundingClientRect();
+                const worldX = rect.left + rect.width / 2;
+                const worldY = rect.top + rect.height / 2;
+                const worldZ = parseFloat(getComputedStyle(this).zIndex) || 0;
+                
+                // 将位置信息存储在元素上
+                this.dataset.worldX = worldX;
+                this.dataset.worldY = worldY;
+                this.dataset.worldZ = worldZ;
+                
+                // 2. 停止所有动画和变换
+                // 保存原始样式以便恢复
+                this._originalTransform = this.style.transform;
+                this._originalZIndex = this.style.zIndex;
+                
+                // 应用视觉效果但不改变位置
+                this.classList.add('photo-hover');
+                
+                // 3. 阻止容器的动画影响该照片
+                // 找到父容器并暂停它的动画
+                const container = this.parentElement;
+                if (container && container.classList.contains('photo-container')) {
+                    container.style.setProperty('--original-transform', container.style.transform || '');
+                    this._parentOriginalAnimationState = container.style.animationPlayState;
+                    container.style.animationPlayState = 'paused';
+                }
+                
+                // 4. 停止该照片自身的动画
+                this.style.animationPlayState = 'paused';
+                
+                // 5. 增加视觉反馈但不改变位置
+                this.style.zIndex = "200"; // 确保显示在最前
+            });
+            
+            photo.addEventListener('mouseleave', function() {
+                // 移除悬停样式
+                this.classList.remove('photo-hover');
+                
+                // 恢复原始样式
+                if (this._originalTransform) {
+                    this.style.transform = this._originalTransform;
+                }
+                
+                if (this._originalZIndex) {
+                    this.style.zIndex = this._originalZIndex;
+                }
+                
+                // 恢复父容器动画
+                const container = this.parentElement;
+                if (container && container.classList.contains('photo-container')) {
+                    if (this._parentOriginalAnimationState) {
+                        container.style.animationPlayState = this._parentOriginalAnimationState;
+                    }
+                }
+                
+                // 恢复自身动画
+                this.style.animationPlayState = '';
+                
+                // 清除保存的位置数据
+                delete this.dataset.worldX;
+                delete this.dataset.worldY;
+                delete this.dataset.worldZ;
+            });
+            
+            // 添加错开的动画延迟，创造级联效果
+            const delay = (layerPhotoCount - i) * 0.1 + layer * 0.3;
+            photo.style.transition = `transform 1s ${delay}s cubic-bezier(0.25, 1, 0.5, 1), 
+                                    box-shadow 0.3s ease-out, filter 0.3s ease`;
+            
+            // 为正面照片添加点击事件
+            photoFront.addEventListener('click', function() {
+                overlayImage.src = `images/${photoIndex}.jpg`;
+                overlay.classList.add('active');
+            });
+            
+            // 为背面照片添加点击事件
+            photoBack.addEventListener('click', function() {
+                overlayImage.src = `images/${backPhotoIndex}.jpg`;
+                overlay.classList.add('active');
+            });
+            
+            // 将照片添加到层容器
+            container.appendChild(photo);
+            
+            // 为图片加载失败添加错误处理
+            const handleImageError = function(element, index) {
+                const img = new Image();
+                img.onerror = function() {
+                    // 如果图片加载失败，使用彩色背景和文字替代
+                    element.style.background = ``;
+                    element.style.backgroundColor = `hsl(${index * 15}, 60%, 40%)`;
+                    // 使用甜蜜短句替代Photo文本
+                    const phraseIndex = (index - 1) % sweetPhrases.length;
+                    element.textContent = sweetPhrases[phraseIndex];
+                    console.warn(`Image not found: images/${index}.jpg. Using fallback.`);
+                };
+                img.src = `images/${index}.jpg`;
+            };
+            
+            // 检查正反面图片是否存在
+            handleImageError(photoFront, photoIndex);
+            handleImageError(photoBack, backPhotoIndex);
+        }
+    }
+    
+    // 关闭全屏查看照片
+    closeButton.addEventListener('click', function() {
+        overlay.classList.remove('active');
+    });
+    
+    // 点击遮罩层空白区域也可关闭全屏查看
+    overlay.addEventListener('click', function(e) {
+        if (e.target === overlay) {
+            overlay.classList.remove('active');
+        }
+    });
+
+    // 初始化旋转参数
+    let tX = 0; // Y轴旋转角度
+    let tY = 10; // X轴旋转角度
+    let desX = 0; // X方向惯性
+    let desY = 0; // Y方向惯性
+    let mouseWheelIndex = 1000; // 鼠标滚轮缩放值, 设置为定义的最小值以实现初始"最小"滚轮值 (最大放大)
+    updatePerspective(); // 应用初始透视设置
+    let isAutoRotating = false; // 自动旋转状态 - 已改为默认关闭，因为现在每层独立旋转
+
+    // 动画相关变量
+    let autoRotateSpeed = 0.05; // 自动旋转速度
+    let animationFrameId = null; // 自动旋转动画帧ID
+    let inertiaFrameId = null; // 惯性动画帧ID
+    
+    // 暂停/恢复各层独立动画
+    function toggleLayerAnimations(pause) {
+        const containers = document.querySelectorAll('.photo-container');
+        containers.forEach(container => {
+            if (pause) {
+                container.style.animationPlayState = 'paused';
+            } else {
+                container.style.animationPlayState = 'running';
+            }
+        });
+    }
+
+    // 自动旋转功能 - 整体相册旋转
+    function startAutoRotation() {
+        isAutoRotating = true;
+        autoRotateBtn.textContent = '❚❚'; // 暂停符号
+        
+        // 暂停各层的独立动画
+        toggleLayerAnimations(true);
+        
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+        // 使用requestAnimationFrame实现平滑动画
+        function autoRotateLoop() {
+            tX += autoRotateSpeed;
+            obox.style.transform = `rotateX(${-tY}deg) rotateY(${tX}deg)`;
+            animationFrameId = requestAnimationFrame(autoRotateLoop);
+        }
+        autoRotateLoop();
+    }
+
+    // 停止自动旋转
+    function stopAutoRotation() {
+        isAutoRotating = false;
+        autoRotateBtn.textContent = '▶'; // 播放符号
+        
+        // 恢复各层的独立动画
+        toggleLayerAnimations(false);
+        
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+    }
+    
+    // 控制按钮事件处理
+    // 自动旋转切换
+    autoRotateBtn.addEventListener('click', function() {
+        if (isAutoRotating) {
+            stopAutoRotation();
+        } else {
+            startAutoRotation();
+        }
+    });
+    
+    // 向左旋转
+    rotateLeftBtn.addEventListener('click', function() {
+        stopAutoRotation();
+        tX -= 15;
+        obox.style.transform = `rotateX(${-tY}deg) rotateY(${tX}deg)`;
+    });
+    
+    // 向右旋转
+    rotateRightBtn.addEventListener('click', function() {
+        stopAutoRotation();
+        tX += 15;
+        obox.style.transform = `rotateX(${-tY}deg) rotateY(${tX}deg)`;
+    });
+    
+    // 放大
+    zoomInBtn.addEventListener('click', function() {
+        mouseWheelIndex -= 50;
+        updatePerspective();
+    });
+    
+    // 缩小
+    zoomOutBtn.addEventListener('click', function() {
+        mouseWheelIndex += 50;
+        updatePerspective();
+    });
+    
+    // 更新透视深度
+    function updatePerspective() {
+        // 限制透视值范围
+        const minPerspectiveOffset = -800;
+        const maxPerspectiveOffset = 4000;
+        
+        if (mouseWheelIndex < minPerspectiveOffset) mouseWheelIndex = minPerspectiveOffset;
+        if (mouseWheelIndex > maxPerspectiveOffset) mouseWheelIndex = maxPerspectiveOffset;
+        
+        document.body.style.perspective = (1000 + mouseWheelIndex) + "px";
+    }
+
+    // 处理鼠标拖动旋转
+    document.onmousedown = function(e) {
+        // 如果遮罩层活跃，不执行拖动
+        if (overlay.classList.contains('active')) return;
+        
+        if (inertiaFrameId) cancelAnimationFrame(inertiaFrameId);
+        stopAutoRotation();
+
+        e = e || window.event;
+        let sX = e.clientX;
+        let sY = e.clientY;
+
+        // 鼠标移动事件
+        document.onmousemove = function(ev) {
+            ev = ev || window.event;
+            const nX = ev.clientX;
+            const nY = ev.clientY;
+
+            // 计算鼠标移动距离
+            desX = nX - sX;
+            desY = nY - sY;
+
+            // 应用旋转变化
+            tX += desX * 0.12;
+            tY += desY * 0.12;
+
+            // 限制X轴旋转范围，防止翻转过度
+            if (tY > 80) tY = 80;
+            if (tY < -80) tY = -80;
+
+            obox.style.transform = `rotateX(${-tY}deg) rotateY(${tX}deg)`;
+
+            // 更新坐标
+            sX = nX;
+            sY = nY;
+        };
+
+        // 鼠标释放事件
+        document.onmouseup = function() {
+            document.onmousemove = document.onmouseup = null;
+
+            // 惯性效果
+            function inertiaLoop() {
+                // 减少速度，模拟摩擦力
+                desX *= 0.92;
+                desY *= 0.92;
+                tX += desX * 0.1;
+                tY += desY * 0.1;
+
+                // 限制旋转范围
+                if (tY > 80) tY = 80;
+                if (tY < -80) tY = -80;
+
+                obox.style.transform = `rotateX(${-tY}deg) rotateY(${tX}deg)`;
+
+                // 当速度足够小时停止惯性
+                if (Math.abs(desX) < 0.5 && Math.abs(desY) < 0.5) {
+                    cancelAnimationFrame(inertiaFrameId);
+                } else {
+                    inertiaFrameId = requestAnimationFrame(inertiaLoop);
+                }
+            }
+            inertiaFrameId = requestAnimationFrame(inertiaLoop);
+        };
+        return false;
+    };
+
+    // 处理鼠标滚轮缩放
+    function handleMouseWheel(e) {
+        e = e || window.event;
+        // 阻止默认滚动行为
+        if (e.preventDefault) e.preventDefault();
+        
+        // 标准化滚轮增量值
+        const delta = Math.max(-1, Math.min(1, (e.wheelDelta || -e.detail)));
+
+        if (delta > 0) { // 放大
+            mouseWheelIndex -= 30;
+        } else { // 缩小
+            mouseWheelIndex += 40;
+        }
+
+        // 更新透视值
+        updatePerspective();
+        return false;
+    }
+
+    // 添加滚轮事件监听
+    if (document.addEventListener) {
+        document.addEventListener("mousewheel", handleMouseWheel, { passive: false });
+        document.addEventListener("DOMMouseScroll", handleMouseWheel, { passive: false });
+    } else {
+        document.attachEvent("onmousewheel", handleMouseWheel);
+    }
+
+    // 应用初始旋转
+    obox.style.transform = `rotateX(${-tY}deg) rotateY(${tX}deg)`;
+    
+    // 添加键盘控制
+    document.addEventListener('keydown', function(e) {
+        // 方向键控制旋转
+        if (e.key === 'ArrowLeft') rotateLeftBtn.click();
+        if (e.key === 'ArrowRight') rotateRightBtn.click();
+        
+        // 方向键控制倾斜
+        if (e.key === 'ArrowUp') tY += 5;
+        if (e.key === 'ArrowDown') tY -= 5;
+        
+        // 限制倾斜范围
+        if (tY > 80) tY = 80;
+        if (tY < -80) tY = -80;
+        
+        // 空格键切换自动旋转
+        if (e.key === ' ') autoRotateBtn.click();
+        
+        // ESC键关闭全屏查看
+        if (e.key === 'Escape' && overlay.classList.contains('active')) {
+            overlay.classList.remove('active');
+        }
+        
+        // 应用变换
+        obox.style.transform = `rotateX(${-tY}deg) rotateY(${tX}deg)`;
+    });
+    
+    // 初始时各层旋转动画已经启动，不需要调用startAutoRotation()
+    
+    // 添加鼠标移动心形特效
+    document.addEventListener('mousemove', createHeart);
+    document.addEventListener('click', function(e) {
+        // 点击时创建多个爱心
+        for (let i = 0; i < 5; i++) {
+            setTimeout(() => createHeart(e), i * 100);
+        }
+    });
+
+    // 添加鼠标光晕效果
+    const cursorGlow = document.querySelector('.cursor-glow');
+    document.addEventListener('mousemove', (e) => {
+        cursorGlow.style.left = `${e.clientX}px`;
+        cursorGlow.style.top = `${e.clientY}px`;
+    });
+    
+    // 添加照片点击翻转效果
+    document.querySelectorAll('.photo').forEach(photo => {
+        photo.addEventListener('dblclick', function(e) {
+            // 防止触发单击事件的行为
+            e.stopPropagation();
+            
+            // 添加/移除翻转类
+            this.classList.toggle('flipped');
+            
+            // 播放翻转音效
+            playSound('flip');
+        });
+    });
+    
+    // 添加樱花飘落效果
+    let blossomActive = true; // 默认开启
+    let blossomInterval;
+    
+    function toggleBlossom() {
+        blossomActive = !blossomActive;
+        
+        if (blossomActive) {
+            document.getElementById('toggle-blossom').setAttribute('data-tooltip', '樱花效果已开启');
+            startBlossom();
+        } else {
+            document.getElementById('toggle-blossom').setAttribute('data-tooltip', '樱花效果已关闭');
+            stopBlossom();
+        }
+    }
+    
+    function startBlossom() {
+        if (!blossomInterval) {
+            blossomInterval = setInterval(createBlossom, 300);
+        }
+    }
+    
+    function stopBlossom() {
+        if (blossomInterval) {
+            clearInterval(blossomInterval);
+            blossomInterval = null;
+        }
+    }
+    
+    // 恢复createBlossom函数，这是实际创建樱花特效的核心函数
+    function createBlossom() {
+        const blossom = document.createElement('div');
+        blossom.className = 'cherry-blossom';
+        
+        // 随机位置和大小
+        const size = 10 + Math.random() * 15;
+        const left = Math.random() * window.innerWidth;
+        
+        blossom.style.left = `${left}px`;
+        blossom.style.width = `${size}px`;
+        blossom.style.height = `${size}px`;
+        
+        // 随机旋转和速度
+        const duration = 7 + Math.random() * 7;
+        blossom.style.animation = `fall ${duration}s linear forwards`;
+        
+        // 随机颜色变化
+        const hue = 350 + Math.random() * 20; // 粉色色调范围
+        const saturation = 90 + Math.random() * 10;
+        const lightness = 80 + Math.random() * 10;
+        blossom.style.backgroundColor = `hsl(${hue}, ${saturation}%, ${lightness}%)`;
+        
+        document.body.appendChild(blossom);
+        
+        // 动画结束后移除
+        setTimeout(() => {
+            blossom.remove();
+        }, duration * 1000);
+    }
+    
+    // 添加樱花效果按钮事件监听
+    document.getElementById('toggle-blossom').addEventListener('click', toggleBlossom);
+    
+    // 添加音乐播放功能
+    const musicPlayer = document.getElementById('music-player');
+    const playPauseBtn = document.getElementById('play-pause');
+    const songInfo = document.getElementById('song-info');
+    
+    // 歌曲列表
+    const songs = [
+        { title: "予你百封情书", url: "music/予你百封情书.mp3" },
+    ];
+    
+    // 创建音频元素
+    const audio = new Audio();
+    audio.volume = 0.5;
+    let currentSongIndex = 0;
+    let isPlaying = false;
+    
+    // 添加音频错误处理
+    audio.addEventListener('error', function(e) {
+        console.error('音频加载错误:', e);
+        songInfo.textContent = '音乐加载失败，尝试下一首';
+        // 尝试播放下一首
+        currentSongIndex = (currentSongIndex + 1) % songs.length;
+        loadSong(currentSongIndex);
+        audio.play().catch(err => {
+            console.error('播放失败:', err);
+            songInfo.textContent = '音乐播放失败';
+        });
+    });
+    
+    // 播放/暂停功能
+    playPauseBtn.addEventListener('click', function() {
+        if (isPlaying) {
+            audio.pause();
+            playPauseBtn.textContent = '▶';
+            isPlaying = false;
+        } else {
+            if (!audio.src && songs.length > 0) {
+                loadSong(currentSongIndex);
+            }
+            audio.play()
+                .then(() => {
+                    playPauseBtn.textContent = '❚❚';
+                    isPlaying = true;
+                    if (songs[currentSongIndex]) { // Update title on successful play
+                        songInfo.textContent = songs[currentSongIndex].title;
+                    }
+                })
+                .catch(err => {
+                    console.error('播放失败 (button click):', err);
+                    songInfo.textContent = '音乐播放失败';
+                    playPauseBtn.textContent = '▶'; // Ensure button reflects error state
+                    isPlaying = false;             // Ensure isPlaying reflects error state
+                });
+        }
+    });
+    
+    function loadSong(index) {
+        const song = songs[index];
+        audio.src = song.url;
+        songInfo.textContent = song.title;
+    }
+    
+    // 歌曲结束后自动播放下一首
+    audio.addEventListener('ended', function() {
+        currentSongIndex = (currentSongIndex + 1) % songs.length;
+        loadSong(currentSongIndex);
+        audio.play();
+    });
+    
+    // 自动播放背景音乐
+    loadSong(currentSongIndex);
+    audio.play().then(() => {
+        isPlaying = true;
+        playPauseBtn.textContent = '❚❚';
+        songInfo.textContent = songs[currentSongIndex].title;
+        console.log("音乐已自动播放:", songs[currentSongIndex].title);
+    }).catch(err => {
+        console.error('自动播放失败 (initial attempt):', err);
+        songInfo.textContent = '点击播放音乐';
+        // isPlaying remains false, playPauseBtn text is implicitly '▶'
+
+        const playAfterInteractionHandler = () => {
+            // Only attempt if audio is loaded, paused, and not already playing
+            if (audio && audio.src && audio.paused && !isPlaying) {
+                 console.log("用户首次交互，尝试播放音乐。");
+                 audio.play().then(() => {
+                     isPlaying = true;
+                     playPauseBtn.textContent = '❚❚';
+                     if (songs[currentSongIndex]) {
+                        songInfo.textContent = songs[currentSongIndex].title;
+                     }
+                     console.log("音乐在用户交互后开始播放:", songs[currentSongIndex].title);
+                 }).catch(interactionErr => {
+                     console.error('用户交互后播放失败:', interactionErr);
+                     // songInfo might remain '点击播放音乐' or update to general failure
+                     // Ensure button and state reflect this secondary failure
+                     playPauseBtn.textContent = '▶';
+                     isPlaying = false;
+                 });
+            }
+            // Remove listeners after the first interaction attempt to avoid multiple triggers.
+            // User can use the play button thereafter if this attempt also fails.
+            document.removeEventListener('click', playAfterInteractionHandler, { capture: true });
+            document.removeEventListener('keydown', playAfterInteractionHandler, { capture: true });
+            document.removeEventListener('touchstart', playAfterInteractionHandler, { capture: true });
+        };
+
+        console.log("自动播放失败，将尝试在首次用户交互后播放。");
+        // Listen for the first interaction on the document
+        document.addEventListener('click', playAfterInteractionHandler, { once: true, capture: true });
+        document.addEventListener('keydown', playAfterInteractionHandler, { once: true, capture: true });
+        document.addEventListener('touchstart', playAfterInteractionHandler, { once: true, capture: true });
+    });
+    
+    // 全景模式切换
+    const panoramaToggle = document.getElementById('panorama-toggle');
+    panoramaToggle.addEventListener('click', function() {
+        document.body.classList.toggle('panorama-mode');
+        if (document.body.classList.contains('panorama-mode')) {
+            panoramaToggle.textContent = '正常模式';
+        } else {
+            panoramaToggle.textContent = '全景模式';
+        }
+    });
+    
+    // 添加音效功能
+    const sounds = {
+        flip: 'https://assets.mixkit.co/sfx/preview/mixkit-light-page-turn-1151.mp3',
+        click: 'https://assets.mixkit.co/sfx/preview/mixkit-modern-click-box-check-1120.mp3'
+    };
+    
+    function playSound(soundName) {
+        if (sounds[soundName]) {
+            const sound = new Audio(sounds[soundName]);
+            sound.volume = 0.3;
+            sound.play();
+        }
+    }
+    
+    // 为控制按钮添加点击音效
+    document.querySelectorAll('.control-btn, .toolbar-btn').forEach(btn => {
+        btn.addEventListener('click', () => playSound('click'));
+    });
+    
+    // 自动开启樱花效果
+    startBlossom();
+
+    // 确保标题同步，并包含表情符号和正确的日期格式
+    document.getElementById('album-title').innerHTML = '2022.10.02 初次遇见 💑，怦然心动自此开始<br>2022.12.07 牵你之手 💌，将余生交付与你<br>我的恋爱脑，只为你而跳动，朝朝暮暮，皆是欢喜 🌸';
+
+    // Start the love timer
+    startLoveTimer();
+}
+
+// Function to start and update the love timer
+function startLoveTimer() {
+    const loveStartDate = new Date('2022-12-07T00:00:00');
+    const timerElement = document.getElementById('love-timer');
+
+    if (!timerElement) {
+        console.error("Love timer element not found!");
+        return;
+    }
+    
+    // Make timer visible smoothly
+    setTimeout(() => {
+        timerElement.style.opacity = '1';
+    }, 700); // Delay slightly more than album animation
+
+    function updateTimer() {
+        const now = new Date();
+        let diff = now - loveStartDate;
+
+        if (diff < 0) {
+            timerElement.innerHTML = "💖 Our journey is about to begin! 💖";
+            return;
+        }
+
+        const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+        diff -= days * (1000 * 60 * 60 * 24);
+
+        const hours = Math.floor(diff / (1000 * 60 * 60));
+        diff -= hours * (1000 * 60 * 60);
+
+        const minutes = Math.floor(diff / (1000 * 60));
+        diff -= minutes * (1000 * 60);
+
+        const seconds = Math.floor(diff / 1000);
+
+        timerElement.innerHTML = `💑 相爱时光: ${days}天 ${hours}小时 ${minutes}分钟 ${seconds}秒 💖`;
+    }
+
+    updateTimer(); // Initial call
+    setInterval(updateTimer, 1000); // Update every second
+}
+
+// 创建星星背景
+function createStars() {
+    const starsContainer = document.getElementById('stars');
+    const starCount = 100;
+    
+    for (let i = 0; i < starCount; i++) {
+        const star = document.createElement('div');
+        star.className = 'star';
+        
+        // 随机位置
+        const left = Math.random() * 100;
+        const top = Math.random() * 100;
+        
+        // 随机大小
+        const size = Math.random() * 4;
+        
+        // 随机动画延迟
+        const delay = Math.random() * 10;
+        
+        // 随机亮度
+        const brightness = 0.5 + Math.random() * 0.5;
+        
+        star.style.left = `${left}%`;
+        star.style.top = `${top}%`;
+        star.style.width = `${size}px`;
+        star.style.height = `${size}px`;
+        star.style.animationDelay = `${delay}s`;
+        star.style.opacity = 0;
+        star.style.filter = `brightness(${brightness})`;
+        
+        starsContainer.appendChild(star);
+    }
+}
+
+// 创建爱心的函数
+function createHeart(e) {
+    // 只在有一定几率时创建爱心，避免太密集
+    if (Math.random() > 0.2) return;
+    
+    // 创建爱心元素
+    const heart = document.createElement('div');
+    heart.className = 'heart';
+    
+    // 随机选择爱心颜色
+    const colorClasses = ['heart-pink', 'heart-purple', 'heart-blue', 'heart-cyan', 'heart-gold'];
+    heart.classList.add(colorClasses[Math.floor(Math.random() * colorClasses.length)]);
+    
+    // 设置爱心内容，使用Unicode爱心符号
+    const heartShapes = ['♥', '❤', '♡', '💗', '💕', '💖', '💘'];
+    heart.innerHTML = heartShapes[Math.floor(Math.random() * heartShapes.length)];
+    
+    // 设置爱心位置为鼠标位置
+    heart.style.left = `${e.clientX}px`;
+    heart.style.top = `${e.clientY}px`;
+    
+    // 随机大小变化
+    const size = 15 + Math.random() * 10;
+    heart.style.fontSize = `${size}px`;
+    
+    // 随机初始旋转角度
+    const initRotation = -20 + Math.random() * 40;
+    heart.style.transform = `translate(-50%, -50%) rotate(${initRotation}deg)`;
+    
+    // 添加到文档
+    document.body.appendChild(heart);
+    
+    // 动画完成后移除元素
+    heart.addEventListener('animationend', function() {
+        heart.remove();
+    });
+}
+</script>
+</body>
+</html>
